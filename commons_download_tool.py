@@ -16,6 +16,7 @@ import zipfile
 import io
 import json
 import urllib.parse
+import time
 
 #Parameters
 base_url = 'http://commons.wikimedia.org/wiki/'
@@ -68,7 +69,17 @@ def get_file(filename):
 			zip_file.write(path + filename)
 		return
 
-	response = requests.get(url, stream=True)
+	while True:
+		response = requests.get(url, stream=True)
+		if response.status_code == 200:
+			break
+		elif response.status_code == 500 or response.status_code == 429:
+			print('\nstatus_code: '+str(response.status_code))
+			time.sleep(10)
+		else:
+			print('\nstatus_code: '+str(response.status_code))
+			del response
+			return
 
 	file_content = response.content
 
