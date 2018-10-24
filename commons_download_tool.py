@@ -1,10 +1,9 @@
-#!/usr/bin/python2.7
+#!/usr/bin/python3.5
 # -*- coding: utf-8 -*-
 #Autor: Antoine "0x010C" Lamielle
 #Date: 20 July 2018
 #License: GNU GPL v3
 
-from __future__ import print_function
 import sys
 import os
 import requests
@@ -16,6 +15,7 @@ import hashlib
 import zipfile
 import io
 import json
+import urllib.parse
 
 #Parameters
 base_url = 'http://commons.wikimedia.org/wiki/'
@@ -61,6 +61,7 @@ def get_file(filename):
 	path = directory
 	if split != None:
 		path += filename.replace(split, '/', split_level).rsplit('/',1)[0] + '/'
+		filename = filename.replace(split, '/', split_level).rsplit('/',1)[1]
 
 	if os.path.isfile(path + filename):
 		with zip_lock:
@@ -153,7 +154,7 @@ def get_params():
 			for cell in line:
 				if line[cell]['type'] == 'uri':
 					if line[cell]['value'].startswith(base_url):
-						filenames += [ line[cell]['value'].split('/')[-1] ]
+						filenames += [ urllib.parse.unquote(line[cell]['value'].split('/')[-1]) ]
 
 
 get_params()
