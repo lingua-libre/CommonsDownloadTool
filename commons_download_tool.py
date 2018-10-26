@@ -27,8 +27,6 @@ nb_threads = 4
 output = './out.zip'
 keep_files = False
 zip_file = None
-split = None
-split_level = 3
 nb_total_files = -1
 
 #Threading vars
@@ -45,28 +43,26 @@ class FilesDownloader(threading.Thread):
 		while not self.__stop__:
 			with filename_lock:
 				if len(filenames) > 0:
-					filename = filenames.pop()
+					(fileurl, filename) = filenames.pop()
 					print('\b'*(100)+"[{0}/{1}] Download".format(nb_total_files-len(filenames), nb_total_files), end="")
 					sys.stdout.flush()
 				else:
 					break
 
-			get_file(filename)
+			get_file(fileurl, filename)
 
 	def stop(self):
 		self.__stop__ = True
 
-def get_file(filename):
-	global zip_file, base_url, split, split_level
-	url = base_url + 'Special:FilePath/' + filename
-	path = directory
-	if split != None:
-		path += filename.replace(split, '/', split_level).rsplit('/',1)[0] + '/'
-		filename = filename.replace(split, '/', split_level).rsplit('/',1)[1]
+def get_file(fileurl, filename):
+	global zip_file, base_url
+	url = base_url + 'Special:FilePath/' + fileurl
+	path = filename.rsplit('/',1)[0] + '/'
+	filename = filename.rsplit('/',1)[1]
 
-	if os.path.isfile(path + filename):
+	if os.path.isfile(directory + path + filename):
 		with zip_lock:
-			zip_file.write(path + filename)
+			zip_file.write(directory + path + filename, arcname=path + filename)
 		return
 
 	while True:
@@ -87,10 +83,10 @@ def get_file(filename):
 		zip_file.writestr(path + filename, file_content)
 
 	if keep_files:
-		if path == '':
+		if directory + path == '':
 			path = './'
-		os.makedirs(path, exist_ok=True)
-		with open(path + filename, 'wb') as out_file:
+		os.makedirs(directory + path, exist_ok=True)
+		with open(directory + path + filename, 'wb') as out_file:
 			out_file.write(file_content)
 
 	del response
@@ -121,7 +117,7 @@ def get_all_files():
 
 
 def get_params():
-	global base_url, sparql_url, directory, nb_threads, output, keep_files, filenames, split, split_level
+	global base_url, sparql_url, directory, nb_threads, output, keep_files, filenames
 
 
 	# Declare the command-line arguments
@@ -132,11 +128,9 @@ def get_params():
 	parser.add_argument('--keep', help='Keep files unzipped in the directory', action='store_true', default=False)
 	parser.add_argument('--threads', help='Number of paralel download allowed.', type=int, default=nb_threads)
 	parser.add_argument('--output', help='Output file.', default=output)
-	parser.add_argument('--split', help='Separate files in subdirectories by spliting according to the given char')
-	parser.add_argument('--splitlevel', help='Set the maximum level of subdirectories if --split is set', type=int, default=split_level)
 	sourcegroup = parser.add_mutually_exclusive_group(required=True)
 	sourcegroup.add_argument('--category', help='Use a category to generate the list of files to download')
-	sourcegroup.add_argument('--sparql', help='Use a sparql request to generate the list of files to download')
+	sourcegroup.add_argument('--sparql', help='Use a sparql request to generate the list of files to download; must contain a ?file field and can have an optional ?filename field')
 
 	# Parse the command-line arguments
 	args = parser.parse_args()
@@ -146,8 +140,6 @@ def get_params():
 	nb_threads = args.threads
 	output = args.output
 	keep_files = args.keep
-	split = args.split
-	split_level = args.splitlevel
 	sparql_url = args.sparqlurl
 
 
@@ -160,12 +152,15 @@ def get_params():
 			'query': args.sparql
 		})
 		response = json.loads(response.text)['results']['bindings']
-
 		for line in response:
-			for cell in line:
-				if line[cell]['type'] == 'uri':
-					if line[cell]['value'].startswith(base_url):
-						filenames += [ urllib.parse.unquote(line[cell]['value'].split('/')[-1]) ]
+			if 'file' in line:
+				if line['file']['type'] == 'uri':
+					if line['file']['value'].startswith(base_url):
+						fileurl = urllib.parse.unquote(line['file']['value'].split('/')[-1])
+						filename = fileurl
+						if 'filename' in line:
+							filename = urllib.parse.unquote(line['filename']['value'])
+						filenames += [ (fileurl, filename) ]
 
 
 get_params()
