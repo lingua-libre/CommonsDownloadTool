@@ -26,6 +26,8 @@ directory = ''
 nb_threads = 4
 output = './out.zip'
 keep_files = False
+force_download = False
+no_zip = False
 zip_file = None
 nb_total_files = -1
 
@@ -60,7 +62,7 @@ def get_file(fileurl, filename):
 	path = filename.rsplit('/',1)[0] + '/'
 	filename = filename.rsplit('/',1)[1]
 
-	if os.path.isfile(directory + path + filename):
+	if os.path.isfile(directory + path + filename) and not no_zip and not force_download:
 		with zip_lock:
 			zip_file.write(directory + path + filename, arcname=path + filename)
 		return
@@ -79,8 +81,9 @@ def get_file(fileurl, filename):
 
 	file_content = response.content
 
-	with zip_lock:
-		zip_file.writestr(path + filename, file_content)
+	if not no_zip:
+		with zip_lock:
+			zip_file.writestr(path + filename, file_content)
 
 	if keep_files:
 		if directory + path == '':
@@ -93,7 +96,10 @@ def get_file(fileurl, filename):
 
 def get_all_files():
 	global zip_file, nb_total_files
-	zip_file = zipfile.ZipFile(output, "w")
+
+	if not no_zip:
+	    zip_file = zipfile.ZipFile(output, "w")
+
 	nb_total_files = len(filenames)
 
 	threads = []
@@ -107,17 +113,19 @@ def get_all_files():
 	except KeyboardInterrupt:
 		print("STOPPING")
 		sys.stdout.flush()
-		zip_file.close()
+		if not no_zip:
+		    zip_file.close()
 		for i in range(0,nb_threads):
 			threads[i].stop()
 			threads[i].join()
-	zip_file.close()
+	if not no_zip:
+	    zip_file.close()
 	print('')
 
 
 
 def get_params():
-	global base_url, sparql_url, directory, nb_threads, output, keep_files, filenames
+	global base_url, sparql_url, directory, nb_threads, output, keep_files, force_download, no_zip, filenames
 
 
 	# Declare the command-line arguments
@@ -125,9 +133,11 @@ def get_params():
 	parser.add_argument('--url', help='Article path of the wiki to download files of.', default=base_url)
 	parser.add_argument('--sparqlurl', help='Url of the SPARQL endpoint to use, if --sparql is used.', default=sparql_url)
 	parser.add_argument('--directory', help='Folder in which to put downloaded files.', default=directory)
-	parser.add_argument('--keep', help='Keep files unzipped in the directory', action='store_true', default=False)
+	parser.add_argument('--keep', help='Keep files unzipped in the directory', action='store_true', default=keep_files)
 	parser.add_argument('--threads', help='Number of paralel download allowed.', type=int, default=nb_threads)
 	parser.add_argument('--output', help='Output file.', default=output)
+	parser.add_argument('--forcedownload', help='Download files even if they are already present locally.', action='store_true', default=force_download)
+	parser.add_argument('--nozip', help='Do not zip files once downloaded.', action='store_true', default=no_zip)
 	sourcegroup = parser.add_mutually_exclusive_group(required=True)
 	sourcegroup.add_argument('--category', help='Use a category to generate the list of files to download')
 	sourcegroup.add_argument('--sparql', help='Use a sparql request to generate the list of files to download; must contain a ?file field and can have an optional ?filename field')
@@ -141,6 +151,8 @@ def get_params():
 	output = args.output
 	keep_files = args.keep
 	sparql_url = args.sparqlurl
+	force_download = args.forcedownload
+	no_zip = args.nozip
 
 
 	if args.category != None:
