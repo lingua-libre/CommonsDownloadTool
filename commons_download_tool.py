@@ -30,6 +30,7 @@ force_download = False
 no_zip = False
 zip_file = None
 nb_total_files = -1
+file_format = ''
 
 #Threading vars
 filename_lock = threading.Lock()
@@ -56,11 +57,49 @@ class FilesDownloader(threading.Thread):
 	def stop(self):
 		self.__stop__ = True
 
+def commons_file_url(filename, file_format=None, width=0):
+	# Returns the direct URL of a file on Wikimedia Commons.
+	# Per https://frama.link/commons_path
+
+	hashed_filename = hashlib.md5(filename.encode('utf-8')).hexdigest()
+
+	base_url = "https://upload.wikimedia.org/wikipedia/commons"
+
+	if width != 0:
+		path = "thumb/{}/{}/{}/{}px-{}".format(
+			hashed_filename[:1],
+			hashed_filename[:2],
+			filename,
+			width,
+			filename)
+		if filename[-4:].lower() == '.svg':
+			path += ".png"
+	elif file_format != None:
+		path = "transcoded/{}/{}/{}/{}.{}".format(
+			hashed_filename[:1],
+			hashed_filename[:2],
+			filename,
+			filename,
+			file_format)
+	else:
+		path = "{}/{}/{}".format(
+			hashed_filename[:1],
+			hashed_filename[:2],
+			filename)
+
+
+	return "{}/{}".format(base_url, path)
+
 def get_file(fileurl, filename):
-	global zip_file, base_url
-	url = base_url + 'Special:FilePath/' + fileurl
+	global zip_file, base_url, file_format
 	path = filename.rsplit('/',1)[0] + '/'
 	filename = filename.rsplit('/',1)[1]
+
+	if file_format == '':
+		file_format = None
+	else:
+		filename = '.'.join(filename.split( '.' )[:-1]) + '.' + file_format
+	url = commons_file_url( fileurl.replace( ' ', '_' ), file_format )
 
 	if os.path.isfile(directory + path + filename) and not no_zip and not force_download:
 		with zip_lock:
@@ -98,7 +137,7 @@ def get_all_files():
 	global zip_file, nb_total_files
 
 	if not no_zip:
-	    zip_file = zipfile.ZipFile(output, "w")
+		zip_file = zipfile.ZipFile(output, "w")
 
 	nb_total_files = len(filenames)
 
@@ -114,18 +153,18 @@ def get_all_files():
 		print("STOPPING")
 		sys.stdout.flush()
 		if not no_zip:
-		    zip_file.close()
+			zip_file.close()
 		for i in range(0,nb_threads):
 			threads[i].stop()
 			threads[i].join()
 	if not no_zip:
-	    zip_file.close()
+		zip_file.close()
 	print('')
 
 
 
 def get_params():
-	global base_url, sparql_url, directory, nb_threads, output, keep_files, force_download, no_zip, filenames
+	global base_url, sparql_url, directory, nb_threads, output, keep_files, force_download, no_zip, file_format, filenames
 
 
 	# Declare the command-line arguments
@@ -138,9 +177,11 @@ def get_params():
 	parser.add_argument('--output', help='Output file.', default=output)
 	parser.add_argument('--forcedownload', help='Download files even if they are already present locally.', action='store_true', default=force_download)
 	parser.add_argument('--nozip', help='Do not zip files once downloaded.', action='store_true', default=no_zip)
+	parser.add_argument('--fileformat', help='Force a specific file format.', default=file_format)
 	sourcegroup = parser.add_mutually_exclusive_group(required=True)
 	sourcegroup.add_argument('--category', help='Use a category to generate the list of files to download')
 	sourcegroup.add_argument('--sparql', help='Use a sparql request to generate the list of files to download; must contain a ?file field and can have an optional ?filename field')
+
 
 	# Parse the command-line arguments
 	args = parser.parse_args()
@@ -153,6 +194,7 @@ def get_params():
 	sparql_url = args.sparqlurl
 	force_download = args.forcedownload
 	no_zip = args.nozip
+	file_format = args.fileformat
 
 
 	if args.category != None:
