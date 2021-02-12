@@ -56,7 +56,7 @@ class FilesDownloader(threading.Thread):
 		self.__stop__ = True
 
 
-def commons_file_url(filename, file_format=None, width=0):
+def commons_file_url(filename: str, file_format: str = None, width: int = 0) -> str:
 	# Returns the direct URL of a file on Wikimedia Commons.
 	# Per https://frama.link/commons_path
 
@@ -89,10 +89,10 @@ def commons_file_url(filename, file_format=None, width=0):
 	return "{}/{}".format(base_url, path)
 
 
-def get_file(fileurl, filename):
+def get_file(fileurl, filename) -> None:
 	global zip_file, base_url, file_format
-	path = filename.rsplit('/',1)[0] + '/'
-	filename = filename.rsplit('/',1)[1]
+	path = filename.rsplit('/', 1)[0] + '/'
+	filename = filename.rsplit('/', 1)[1]
 
 	if file_format == '':
 		file_format = None
@@ -133,7 +133,10 @@ def get_file(fileurl, filename):
 	del response
 
 
-def get_all_files():
+def get_all_files() -> None:
+	"""
+	Starts downloading the files.
+	"""
 	global zip_file, nb_total_files
 
 	if not no_zip:
@@ -142,11 +145,12 @@ def get_all_files():
 	nb_total_files = len(filenames)
 
 	threads = []
-	for i in range(0,nb_threads):
+	for i in range(0, nb_threads):
 		threads.append(FilesDownloader())
 		threads[i].start()
 
 	try:
+		# Wait for each of the threads to finish working
 		for i in range(0, nb_threads):
 			threads[i].join()
 	except KeyboardInterrupt:
@@ -162,7 +166,10 @@ def get_all_files():
 	print('')
 
 
-def get_params():
+def get_params() -> None:
+	"""
+	Parses the args of the command line call.
+	"""
 	global base_url, sparql_url, directory, nb_threads, output, keep_files, force_download, no_zip, file_format, filenames
 
 	# Declare the command-line arguments
@@ -213,5 +220,6 @@ def get_params():
 						filenames += [(fileurl, filename)]
 
 
+# Actual script execution
 get_params()
 get_all_files()
