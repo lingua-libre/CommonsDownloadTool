@@ -1,24 +1,22 @@
 #!/usr/bin/python3.5
 # -*- coding: utf-8 -*-
-#Autor: Antoine "0x010C" Lamielle
-#Date: 20 July 2018
-#License: GNU GPL v3
+# Author: Antoine "0x010C" Lamielle
+# Date: 20 July 2018
+# License: GNU GPL v3
 
-import sys
-import os
-import requests
-import shutil
-import threading
-from subprocess import call
 import argparse
 import hashlib
-import zipfile
-import io
 import json
-import urllib.parse
+import os
+import sys
+import threading
 import time
+import urllib.parse
+import zipfile
 
-#Parameters
+import requests
+
+# Parameters
 base_url = 'http://commons.wikimedia.org/wiki/'
 sparql_url = 'https://query.wikidata.org/sparql'
 filenames = []
@@ -32,7 +30,7 @@ zip_file = None
 nb_total_files = -1
 file_format = ''
 
-#Threading vars
+# Threading vars
 filename_lock = threading.Lock()
 zip_lock = threading.Lock()
 
@@ -47,7 +45,7 @@ class FilesDownloader(threading.Thread):
 			with filename_lock:
 				if len(filenames) > 0:
 					(fileurl, filename) = filenames.pop()
-					print('\b'*(100)+"[{0}/{1}] Download".format(nb_total_files-len(filenames), nb_total_files), end="")
+					print('\b' * 100 + "[{0}/{1}] Download".format(nb_total_files - len(filenames), nb_total_files), end="")
 					sys.stdout.flush()
 				else:
 					break
@@ -56,6 +54,7 @@ class FilesDownloader(threading.Thread):
 
 	def stop(self):
 		self.__stop__ = True
+
 
 def commons_file_url(filename, file_format=None, width=0):
 	# Returns the direct URL of a file on Wikimedia Commons.
@@ -74,7 +73,7 @@ def commons_file_url(filename, file_format=None, width=0):
 			filename)
 		if filename[-4:].lower() == '.svg':
 			path += ".png"
-	elif file_format != None:
+	elif file_format is not None:
 		path = "transcoded/{}/{}/{}/{}.{}".format(
 			hashed_filename[:1],
 			hashed_filename[:2],
@@ -87,8 +86,8 @@ def commons_file_url(filename, file_format=None, width=0):
 			hashed_filename[:2],
 			filename)
 
-
 	return "{}/{}".format(base_url, path)
+
 
 def get_file(fileurl, filename):
 	global zip_file, base_url, file_format
@@ -98,8 +97,8 @@ def get_file(fileurl, filename):
 	if file_format == '':
 		file_format = None
 	else:
-		filename = '.'.join(filename.split( '.' )[:-1]) + '.' + file_format
-	url = commons_file_url( fileurl.replace( ' ', '_' ), file_format )
+		filename = '.'.join(filename.split('.')[:-1]) + '.' + file_format
+	url = commons_file_url(fileurl.replace(' ', '_'), file_format)
 
 	if os.path.isfile(directory + path + filename) and not no_zip and not force_download:
 		with zip_lock:
@@ -133,6 +132,7 @@ def get_file(fileurl, filename):
 
 	del response
 
+
 def get_all_files():
 	global zip_file, nb_total_files
 
@@ -147,14 +147,14 @@ def get_all_files():
 		threads[i].start()
 
 	try:
-		for i in range(0,nb_threads):
+		for i in range(0, nb_threads):
 			threads[i].join()
 	except KeyboardInterrupt:
 		print("STOPPING")
 		sys.stdout.flush()
 		if not no_zip:
 			zip_file.close()
-		for i in range(0,nb_threads):
+		for i in range(0, nb_threads):
 			threads[i].stop()
 			threads[i].join()
 	if not no_zip:
@@ -162,10 +162,8 @@ def get_all_files():
 	print('')
 
 
-
 def get_params():
 	global base_url, sparql_url, directory, nb_threads, output, keep_files, force_download, no_zip, file_format, filenames
-
 
 	# Declare the command-line arguments
 	parser = argparse.ArgumentParser(description='Download a set of files from a MediaWiki instance (like Wikimedia Commons).')
@@ -182,7 +180,6 @@ def get_params():
 	sourcegroup.add_argument('--category', help='Use a category to generate the list of files to download')
 	sourcegroup.add_argument('--sparql', help='Use a sparql request to generate the list of files to download; must contain a ?file field and can have an optional ?filename field')
 
-
 	# Parse the command-line arguments
 	args = parser.parse_args()
 
@@ -196,12 +193,11 @@ def get_params():
 	no_zip = args.nozip
 	file_format = args.fileformat
 
-
-	if args.category != None:
-		#TODO
-		print('Comming soon')
-	elif args.sparql != None:
-		response = requests.post(sparql_url, data = {
+	if args.category is not None:
+		# TODO
+		print('Coming soon')
+	elif args.sparql is not None:
+		response = requests.post(sparql_url, data={
 			'format': 'json',
 			'query': args.sparql
 		})
@@ -214,7 +210,7 @@ def get_params():
 						filename = fileurl
 						if 'filename' in line:
 							filename = urllib.parse.unquote(line['filename']['value'])
-						filenames += [ (fileurl, filename) ]
+						filenames += [(fileurl, filename)]
 
 
 get_params()
