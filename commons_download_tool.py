@@ -139,10 +139,12 @@ def get_all_files() -> None:
 	"""
 	global zip_file, nb_total_files
 
+	nb_total_files = len(filenames)
+
 	if not no_zip:
 		zip_file = zipfile.ZipFile(output, "w")
-
-	nb_total_files = len(filenames)
+		zip_file.comment = bytes(f"Archive containing {nb_total_files} recordings from Lingua Libre (lingualibre.org)",
+								 encoding="utf-8")
 
 	threads = []
 	for i in range(0, nb_threads):
