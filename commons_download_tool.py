@@ -29,6 +29,8 @@ no_zip = False
 zip_file = None
 nb_total_files = -1
 file_format = ''
+# Need to fix value of user agent used to download files identified like a bot
+headers = {'User-Agent': ''}
 
 # Threading vars
 filename_lock = threading.Lock()
@@ -106,12 +108,15 @@ def get_file(fileurl, filename) -> None:
         return
 
     while True:
-        response = requests.get(url, stream=True)
+        response = requests.get(url, stream=True, headers=headers)
         if response.status_code == 200:
             break
         elif response.status_code == 500 or response.status_code == 429:
             print('\nstatus_code: '+str(response.status_code))
             time.sleep(10)
+        elif response.status_code == 403:
+            print('\nstatus_code: '+str(response.status_code))
+            time.sleep(5)
         else:
             print('\nstatus_code: '+str(response.status_code))
             del response
