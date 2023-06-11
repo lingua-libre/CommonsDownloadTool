@@ -15,3 +15,7 @@
 You can read this comment with the following commands:
 
 - On Linux: `zipinfo -z archive.zip`
+
+## Contribute
+- [Phabricator: Lingua-libre > Datasets and mass downlaods column](https://phabricator.wikimedia.org/tag/lingua_libre/) — tickets manager
+- [Github: Lingua-libre/CommonsDownloadTool](https://github.com/lingua-libre/CommonsDownloadTool) — code (Python)
