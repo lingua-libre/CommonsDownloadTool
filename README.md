@@ -8,6 +8,10 @@
 ## Usage
 
 ### Command arguments
+```bash
+# Download from list of titles in ../titles-filtered.txt
+python3 commons_download_tool.py --threads 1 --titles ../titles-filtered.txt --keep --fileformat wav --directory out --nozip
+```
 
 ### Zip archives
 
