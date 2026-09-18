@@ -1,6 +1,6 @@
 #!/usr/bin/python3.5
 # -*- coding: utf-8 -*-
-# Author: Antoine "0x010C" Lamielle
+# Authors: Antoine "0x010C" Lamielle, Hugo "Yug" Lopez
 # Date: 20 July 2018
 # License: GNU GPL v3
 
@@ -30,8 +30,7 @@ zip_file = None
 nb_total_files = -1
 file_format = ''
 # Need to fix value of user agent used to download files identified like a bot
-headers = {'User-Agent': ''}
-
+headers = { "User-Agent": "Lingua Libre Bot/1.0 (https://commons.wikimedia.org/wiki/User:Lingua_Libre_Bot ; Botmaster : User:Yug)" }
 # Threading vars
 filename_lock = threading.Lock()
 zip_lock = threading.Lock()
@@ -75,7 +74,7 @@ def commons_file_url(filename: str, file_format: str = None, width: int = 0) -> 
             filename)
         if filename[-4:].lower() == '.svg':
             path += ".png"
-    elif file_format is not None:
+    elif file_format is not None and filename.split('.')[-1].lower() != file_format.lower():
         path = "transcoded/{}/{}/{}/{}.{}".format(
             hashed_filename[:1],
             hashed_filename[:2],
@@ -93,13 +92,19 @@ def commons_file_url(filename: str, file_format: str = None, width: int = 0) -> 
 
 def get_file(fileurl, filename) -> None:
     global zip_file, base_url, file_format
-    path = filename.rsplit('/', 1)[0] + '/'
-    filename = filename.rsplit('/', 1)[1]
+    if '/' in filename:
+        path, filename = filename.rsplit('/', 1)
+        path += '/'
+    else:
+        path = ''
 
     if file_format == '':
         file_format = None
     else:
-        filename = '.'.join(filename.split('.')[:-1]) + '.' + file_format
+        if '.' in filename:
+            filename = '.'.join(filename.split('.')[:-1]) + '.' + file_format
+        else:
+            filename = filename + '.' + file_format
     url = commons_file_url(fileurl.replace(' ', '_'), file_format)
 
     if os.path.isfile(directory + path + filename) and not no_zip and not force_download:
@@ -191,8 +196,9 @@ def get_params() -> None:
     parser.add_argument('--nozip', help='Do not zip files once downloaded.', action='store_true', default=no_zip)
     parser.add_argument('--fileformat', help='Force a specific file format.', default=file_format)
     sourcegroup = parser.add_mutually_exclusive_group(required=True)
-    sourcegroup.add_argument('--category', help='Use a category to generate the list of files to download')
     sourcegroup.add_argument('--sparql', help='Use a sparql request to generate the list of files to download; must contain a ?file field and can have an optional ?filename field')
+    sourcegroup.add_argument('--titles', help='Use a text file with one title per row to generate the list of files to download')
+    sourcegroup.add_argument('--category', help='Use a category to generate the list of files to download')
 
     # Parse the command-line arguments
     args = parser.parse_args()
@@ -207,10 +213,8 @@ def get_params() -> None:
     no_zip = args.nozip
     file_format = args.fileformat
 
-    if args.category is not None:
-        # TODO
-        print('Coming soon')
-    elif args.sparql is not None:
+    # Get list of files from sparql
+    if args.sparql is not None:
         response = requests.post(sparql_url, data={
             'format': 'json',
             'query': args.sparql
@@ -226,7 +230,41 @@ def get_params() -> None:
                             filename = urllib.parse.unquote(line['filename']['value'])
                         filenames += [(fileurl, filename)]
 
+     
+    # Get list of files from local file
+    elif args.titles is not None:
+        with open(args.titles, encoding='utf-8') as f:
+            for line in f:
+                title = line.strip()
+                if title != '':
+                    fileurl = title
+                    filename = title
+                    filenames += [(fileurl, filename)]
 
+    # Fetch list of files from mediawiki category via API call and categorymembers
+    elif args.category is not None:
+        # https://commons.wikimedia.org/w/api.php?action=query&list=categorymembers&cmtitle=Category:Lingua_Libre_pronunciations-oci&cmtype=file&format=json
+        cmcontinue = ''
+        while True:
+            response = requests.get(base_url.replace('/wiki/', '/w/') + 'api.php', params={
+                'action': 'query',
+                'list': 'categorymembers',
+                'cmtitle': 'Category:' + args.category,
+                'cmtype': 'file',
+                'format': 'json',
+                'cmlimit': 500,
+                'cmcontinue': cmcontinue
+            }, headers=headers)
+            response = json.loads(response.text)
+            for line in response['query']['categorymembers']:
+                fileurl = line['title'].split(':', 1)[1]
+                filename = fileurl
+                filenames += [(fileurl, filename)]
+            if 'continue' in response:
+                cmcontinue = response['continue']['cmcontinue']
+            else:
+                break
+    
 # Actual script execution
 get_params()
 get_all_files()
