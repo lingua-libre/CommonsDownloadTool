@@ -11,6 +11,15 @@
 ```bash
 # Download from list of titles in ../titles-filtered.txt
 python3 commons_download_tool.py --threads 1 --titles ../titles-filtered.txt --keep --fileformat wav --directory out --nozip
+
+# Download from a Wikimedia Commons category
+python3 commons_download_tool.py --category "Lingua_Libre_pronunciations-oci"
+
+# Download from a category with multiple threads and keep files unzipped
+python3 commons_download_tool.py --category "Lingua_Libre_pronunciations-fr" --threads 8 --keep --directory out
+
+# Download from a category, force WAV format, and output to a specific zip file
+python3 commons_download_tool.py --category "Lingua_Libre_pronunciations-en" --fileformat wav --output communications-en.zip
 ```
 
 ### Zip archives

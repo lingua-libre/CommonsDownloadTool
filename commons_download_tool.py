@@ -187,6 +187,10 @@ def get_params() -> None:
     # Declare the command-line arguments
     parser = argparse.ArgumentParser(description='Download a set of files from a MediaWiki instance (like Wikimedia Commons).')
     parser.add_argument('--url', help='Article path of the wiki to download files of.', default=base_url)
+    sourcegroup = parser.add_mutually_exclusive_group(required=True)
+    sourcegroup.add_argument('--category', help='Use a category to generate the list of files to download')
+    sourcegroup.add_argument('--titles', help='Use a text file with one title per row to generate the list of files to download')
+    sourcegroup.add_argument('--sparql', help='Use a sparql request to generate the list of files to download; must contain a ?file field and can have an optional ?filename field')
     parser.add_argument('--sparqlurl', help='Url of the SPARQL endpoint to use, if --sparql is used.', default=sparql_url)
     parser.add_argument('--directory', help='Folder in which to put downloaded files.', default=directory)
     parser.add_argument('--keep', help='Keep files unzipped in the directory', action='store_true', default=keep_files)
@@ -195,10 +199,6 @@ def get_params() -> None:
     parser.add_argument('--forcedownload', help='Download files even if they are already present locally.', action='store_true', default=force_download)
     parser.add_argument('--nozip', help='Do not zip files once downloaded.', action='store_true', default=no_zip)
     parser.add_argument('--fileformat', help='Force a specific file format.', default=file_format)
-    sourcegroup = parser.add_mutually_exclusive_group(required=True)
-    sourcegroup.add_argument('--sparql', help='Use a sparql request to generate the list of files to download; must contain a ?file field and can have an optional ?filename field')
-    sourcegroup.add_argument('--titles', help='Use a text file with one title per row to generate the list of files to download')
-    sourcegroup.add_argument('--category', help='Use a category to generate the list of files to download')
 
     # Parse the command-line arguments
     args = parser.parse_args()
