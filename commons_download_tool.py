@@ -28,12 +28,19 @@ force_download = False
 no_zip = False
 zip_file = None
 nb_total_files = -1
+nb_written = 0
 file_format = ''
 # Need to fix value of user agent used to download files identified like a bot
-headers = { "User-Agent": "Lingua Libre Bot/1.0 (https://commons.wikimedia.org/wiki/User:Lingua_Libre_Bot ; Botmaster : User:Yug)" }
+headers = { "User-Agent": "CommonsDownloadTool/1.0 (https://github.com/lingua-libre/CommonsDownloadTool)" }
+zip_comment = 'Archive containing {count} files from Wikimedia Commons'
+
 # Threading vars
 filename_lock = threading.Lock()
 zip_lock = threading.Lock()
+# Redirect page titles met while downloading (404 on the direct URL), saved one per row
+redirects_file = None
+redirects = set()
+redirects_lock = threading.Lock()
 
 
 class FilesDownloader(threading.Thread):
@@ -62,6 +69,8 @@ def commons_file_url(filename: str, file_format: str = None, width: int = 0) -> 
     # Per https://frama.link/commons_path
 
     hashed_filename = hashlib.md5(filename.encode('utf-8')).hexdigest()
+    # Quote after hashing: characters like "?" or "#" would otherwise cut the URL
+    filename = urllib.parse.quote(filename, safe="!$&'()*+,;=:@")
 
     base_url = "https://upload.wikimedia.org/wikipedia/commons"
 
@@ -90,32 +99,46 @@ def commons_file_url(filename: str, file_format: str = None, width: int = 0) -> 
     return "{}/{}".format(base_url, path)
 
 
-def get_file(fileurl, filename) -> None:
-    global zip_file, base_url, file_format
-    if '/' in filename:
-        path, filename = filename.rsplit('/', 1)
-        path += '/'
-    else:
-        path = ''
+def is_redirect(title: str) -> bool:
+    # True if `title` is a redirect page on Commons.
+    response = requests.get(base_url.replace('/wiki/', '/w/') + 'api.php', params={
+        'action': 'query',
+        'titles': 'File:' + title.replace('_', ' '),
+        'redirects': 1,
+        'format': 'json',
+        'formatversion': 2
+    }, headers=headers)
+    return len(response.json().get('query', {}).get('redirects', [])) > 0
 
-    if file_format == '':
-        file_format = None
-    else:
-        if '.' in filename:
-            filename = '.'.join(filename.split('.')[:-1]) + '.' + file_format
-        else:
-            filename = filename + '.' + file_format
-    url = commons_file_url(fileurl.replace(' ', '_'), file_format)
 
-    if os.path.isfile(directory + path + filename) and not no_zip and not force_download:
-        with zip_lock:
-            zip_file.write(directory + path + filename, arcname=path + filename)
-        return
+def record_redirect(title: str) -> None:
+    # Appends a redirect title to redirects_file, once.
+    title = title.replace(' ', '_')
+    with redirects_lock:
+        if title in redirects:
+            return
+        redirects.add(title)
+        os.makedirs(os.path.dirname(redirects_file) or '.', exist_ok=True)
+        with open(redirects_file, 'a', encoding='utf-8') as f:
+            f.write(title + '\n')
 
+
+def with_format(filename: str) -> str:
+    # Swaps the extension for the forced file format, if any.
+    if file_format is None:
+        return filename
+    if '.' in filename:
+        return '.'.join(filename.split('.')[:-1]) + '.' + file_format
+    return filename + '.' + file_format
+
+
+def fetch(title: str):
+    # Returns the response for `title`, or None if it can't be downloaded (missing, or a redirect page).
+    url = commons_file_url(title.replace(' ', '_'), file_format)
     while True:
         response = requests.get(url, stream=True, headers=headers)
         if response.status_code == 200:
-            break
+            return response
         elif response.status_code == 500 or response.status_code == 429:
             print('\nstatus_code: '+str(response.status_code))
             time.sleep(10)
@@ -125,12 +148,39 @@ def get_file(fileurl, filename) -> None:
         else:
             print('\nstatus_code: '+str(response.status_code))
             del response
-            return
+            return None
+
+
+def get_file(fileurl, filename) -> None:
+    global zip_file, base_url, file_format, nb_written
+    if '/' in filename:
+        path, filename = filename.rsplit('/', 1)
+        path += '/'
+    else:
+        path = ''
+
+    if file_format == '':
+        file_format = None
+    filename = with_format(filename)
+
+    if os.path.isfile(directory + path + filename) and not no_zip and not force_download:
+        with zip_lock:
+            zip_file.write(directory + path + filename, arcname=path + filename)
+            nb_written += 1
+        return
+
+    response = fetch(fileurl)
+    if response is None:
+        # Skipped: redirects point to a file downloaded under its final name
+        if redirects_file is not None and is_redirect(fileurl):
+            record_redirect(fileurl)
+        return
 
     file_content = response.content
 
-    if not no_zip:
-        with zip_lock:
+    with zip_lock:
+        nb_written += 1
+        if not no_zip:
             zip_file.writestr(path + filename, file_content)
 
     if keep_files:
@@ -153,8 +203,6 @@ def get_all_files() -> None:
 
     if not no_zip:
         zip_file = zipfile.ZipFile(output, "w")
-        zip_file.comment = bytes(f"Archive containing {nb_total_files} recordings from Lingua Libre (lingualibre.org)",
-                                 encoding="utf-8")
 
     threads = []
     for i in range(0, nb_threads):
@@ -174,6 +222,7 @@ def get_all_files() -> None:
             threads[i].stop()
             threads[i].join()
     if not no_zip:
+        zip_file.comment = bytes(zip_comment.format(count=nb_written), encoding="utf-8")
         zip_file.close()
     print('')
 
@@ -182,7 +231,7 @@ def get_params() -> None:
     """
     Parses the args of the command line call.
     """
-    global base_url, sparql_url, directory, nb_threads, output, keep_files, force_download, no_zip, file_format, filenames
+    global base_url, sparql_url, redirects_file, zip_comment, directory, nb_threads, output, keep_files, force_download, no_zip, file_format, filenames
 
     # Declare the command-line arguments
     parser = argparse.ArgumentParser(description='Download a set of files from a MediaWiki instance (like Wikimedia Commons).')
@@ -198,6 +247,9 @@ def get_params() -> None:
     parser.add_argument('--output', help='Output file.', default=output)
     parser.add_argument('--forcedownload', help='Download files even if they are already present locally.', action='store_true', default=force_download)
     parser.add_argument('--nozip', help='Do not zip files once downloaded.', action='store_true', default=no_zip)
+    parser.add_argument('--redirects', help='File where redirect page titles met during the download are recorded, one per row (disabled if omitted).', default=redirects_file)
+    parser.add_argument('--user-agent', help='User-Agent sent to Wikimedia: name your bot and give a contact.', default=headers['User-Agent'])
+    parser.add_argument('--comment', help='Zip archive comment; {count} is replaced by the number of files written.', default=zip_comment)
     parser.add_argument('--fileformat', help='Force a specific file format.', default=file_format)
 
     # Parse the command-line arguments
@@ -212,6 +264,12 @@ def get_params() -> None:
     force_download = args.forcedownload
     no_zip = args.nozip
     file_format = args.fileformat
+    redirects_file = args.redirects
+    headers['User-Agent'] = args.user_agent
+    zip_comment = args.comment
+    if redirects_file is not None and os.path.isfile(redirects_file):
+        with open(redirects_file, encoding='utf-8') as f:
+            redirects.update(line.strip() for line in f if line.strip())
 
     # Get list of files from sparql
     if args.sparql is not None:
